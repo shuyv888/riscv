@@ -1,6 +1,4 @@
 #include <am.h>
-#include<stdio.h>
-
 #include <klib-macros.h>
 
 extern char _heap_start;
@@ -14,11 +12,9 @@ Area heap = RANGE(&_heap_start, PMEM_END);
 static const char mainargs[MAINARGS_MAX_LEN] = TOSTRING(MAINARGS_PLACEHOLDER); // defined in CFLAGS
 
 void putch(char ch) {
-  *(volatile uint8_t *)0x10000000 = ch;
 }
 
 void halt(int code) {
-  asm volatile("mv a0, %0; ebreak" : :"r"(code));
   while (1);
 }
 

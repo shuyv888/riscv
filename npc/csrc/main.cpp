@@ -247,6 +247,7 @@ int main(int argc, char**argv) {
 
   if (argv[1] == NULL) {
         char filename[] = "/home/shuyv/ysyx-workbench/npc/some_hex/rtc.bin";
+        //char filename[] = "/home/shuyv/ysyx-workbench/npc/some_hex/new.bin";
         //char filename[] = "/home/shuyv/ysyx-workbench/ysyxSoC/ready-to-run/D-stage/hello-minirv-ysyxsoc.bin";
         printf("未指定bin文件,使用默认程序 : %s\n",filename);
         //load_flash_from_bin("/home/shuyv/ysyx-workbench/npc/some_hex/new.bin");
