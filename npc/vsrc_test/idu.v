@@ -27,7 +27,7 @@ module ysyx_25080207_idu (
   output reg          is_jalr,    // JALR指令标志
   output reg          is_auipc,   // AUIPC指令标志
   output reg          is_csrrw,   // CSRRW指令标志
-  output reg          is_csrrs,
+  output reg          is_csrrs,   //csrrs
   
   // 内存访问控制
   output reg          mem_valid,  // 内存访问有效标志(在lsu要改为lsu_valid)
@@ -48,7 +48,7 @@ module ysyx_25080207_idu (
     rd_addr = 5'd0;
     csr_addr = 12'd0;
     imm = 32'd0;
-    {is_add, is_addi, is_lui, is_lw, is_lbu, is_sw, is_sb, is_jalr, is_auipc, is_csrrw, is_csrrs} = 10'b0;
+    {is_add, is_addi, is_lui, is_lw, is_lbu, is_sw, is_sb, is_jalr, is_auipc, is_csrrw, is_csrrw} = 10'b0;
     mem_valid = 0;
     mem_wen = 0;
     mem_addr = 32'b0;
@@ -157,13 +157,13 @@ module ysyx_25080207_idu (
         is_csrrw = 1;
       end
 
-      //11, csrrs
+      //11,csrrs
       32'b???????_?????_?????_010_?????_11100_11 :begin
-        wen = inst_valid;               // 写使能：csrrs会将CSR旧值写入rd
-        csr_addr = inst[31:20];         // CSR地址：inst[31:20]
-        rd_addr = inst[11:7];           // 目标寄存器rd：inst[11:7]
-        rs1_addr = inst[19:15];         // 源寄存器rs1（置位掩码）：inst[19:15]
-        is_csrrs = 1;                   // csrrs指令标志（需在模块输出中新增该信号）
+        wen = inst_valid;
+        csr_addr = inst[31:20];
+        rd_addr = inst[11:7];
+        rs1_addr = inst[19:15];
+        is_csrrs = 1;
       end
 
       //ebreak

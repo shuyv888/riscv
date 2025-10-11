@@ -1,4 +1,4 @@
-module ysyx_25080207 (
+module top (
     // 全局时钟与复位
     input         clock,          // 全局时钟信号
     input         reset,          // 全局复位信号（高有效）

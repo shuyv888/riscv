@@ -1,5 +1,5 @@
 // 1. 头文件：Vtop.h → VysyxSoCFull.h（Verilator 顶层模块头文件命名规则）
-#include "VysyxSoCFull.h"
+#include "Vtop.h"
 #include <verilated.h>       // Verilator仿真头文件（如果用Verilator工具）
 #include <verilated_vcd_c.h>  // 波形跟踪头文件
 #include <string.h>
@@ -246,9 +246,7 @@ int main(int argc, char**argv) {
 //打开外部程序到pmem_rom（逻辑不变）
 
   if (argv[1] == NULL) {
-        char filename[] = "/home/shuyv/ysyx-workbench/ysyxSoC/ready-to-run/D-stage/new.bin";
-        //char filename[] = "/home/shuyv/ysyx-workbench/npc/some_hex/rtc.bin";
-        //char filename[] = "/home/shuyv/ysyx-workbench/npc/some_hex/new.bin";
+        char filename[] = "/home/shuyv/ysyx-workbench/npc/some_hex/rtc.bin";
         //char filename[] = "/home/shuyv/ysyx-workbench/ysyxSoC/ready-to-run/D-stage/hello-minirv-ysyxsoc.bin";
         printf("未指定bin文件,使用默认程序 : %s\n",filename);
         //load_flash_from_bin("/home/shuyv/ysyx-workbench/npc/some_hex/new.bin");
@@ -270,47 +268,47 @@ int main(int argc, char**argv) {
   Verilated::commandArgs(argc, argv);
   Verilated::traceEverOn(true);  // 开启波形跟踪（逻辑不变）
   // 2. 模块实例：Vtop* top → VysyxSoCFull* soc（仅名称替换，类型对应顶层模块）
-  VysyxSoCFull* soc = new VysyxSoCFull;
+  Vtop* top = new Vtop;
   //VerilatedVcdC* tfp = new VerilatedVcdC;  // 波形文件指针（名称不变）
 
   // 初始化波形文件（确保路径正确）（逻辑不变，仅波形文件名适配SoC）
-  // 3. 波形跟踪绑定：top->trace → soc->trace（实例名同步替换）
-  //soc->trace(tfp, 99);
+  // 3. 波形跟踪绑定：top->trace → top->trace（实例名同步替换）
+  //top->trace(tfp, 99);
   // 4. 波形文件名：wave_top.vcd → wave_soc.vcd（与Makefile的WAVE_FILE保持一致）
  // tfp->open("sim/wave_soc.vcd");
 
   //因为时间太短看不清楚变化，专门作了个时间变量（逻辑不变）
   vluint64_t time = 0;  // 时间变量，单位ps
 
-  soc->reset = 1;  // 初始拉高rst
+  top->reset = 1;  // 初始拉高rst
   for (int i = 0; i < 20; i++) {  // 循环RST_CYCLES个完整时钟周期
     // 1. clk低电平阶段
-    soc->clock = 0;
-    soc->eval();          // 评估信号
+    top->clock = 0;
+    top->eval();          // 评估信号
     //tfp->dump(time);      // 记录波形
     time += 10;           // 时间步长（与后续一致）
 
     // 2. clk高电平阶段
-    soc->clock = 1;
-    soc->eval();          // 评估信号
+    top->clock = 1;
+    top->eval();          // 评估信号
     //tfp->dump(time);      // 记录波形
     time += 10;           // 时间步长
   }
   // rst拉高结束，释放rst
-  soc->reset = 0;
+  top->reset = 0;
 
   uint64_t count = 0;
   while(1) {
 
-    soc->clock = 0;
-    soc->eval();
+    top->clock = 0;
+    top->eval();
     //tfp->dump(time);
     time += 10;
-    //soc->inst = pmem_read(soc->pc);（原注释保留，实例名同步）
+    //top->inst = pmem_read(top->pc);（原注释保留，实例名同步）
 
 
-    // if(soc->inst != 0){
-    //printf("count=%" PRIu64 ": PC=0x%08x, inst=0x%08x\n", count, soc->pc, soc->inst);
+    // if(top->inst != 0){
+    //printf("count=%" PRIu64 ": PC=0x%08x, inst=0x%08x\n", count, top->pc, top->inst);
     // }
     
     // if(count == 200000){
@@ -318,7 +316,7 @@ int main(int argc, char**argv) {
     //   break;
     // }
     // if(count % 40 == 0){
-    //   printf("count=%" PRIu64 ": PC=0x%08x, inst=0x%08x\n", count, soc->pc, soc->inst);
+    //   printf("count=%" PRIu64 ": PC=0x%08x, inst=0x%08x\n", count, top->pc, top->inst);
     // }
     if (is_ebreak)
     {
@@ -326,13 +324,13 @@ int main(int argc, char**argv) {
       break;
     }
     
-    // if(soc->illegal_instruction == 1){
+    // if(top->illegal_instruction == 1){
     //   break;
     // }
 
 
-    soc->clock = 1;
-    soc->eval(); 
+    top->clock = 1;
+    top->eval(); 
     //tfp->dump(time);  // 记录上升沿状态
     time +=10;
 
@@ -347,17 +345,17 @@ int main(int argc, char**argv) {
  // delete soc;
 
   printf("\ncount = %" PRIu64 "\n",count);
-  // if(soc->is_ebreak == 1 && soc->illegal_instruction == 1){
-  //   printf("Illegal instruction!, pc = 0x%08x, inst = 0x%08x\n",soc->pc,soc->inst);
+  // if(top->is_ebreak == 1 && top->illegal_instruction == 1){
+  //   printf("Illegal instruction!, pc = 0x%08x, inst = 0x%08x\n",top->pc,top->inst);
   //   printf("BAD\n");
   // }else{
-  //   if(soc->is_ebreak == 1 && soc->a0 == 0){
+  //   if(top->is_ebreak == 1 && top->a0 == 0){
   //     printf("GOOD a0\n");
-  //     printf("is_ebreak: %d, a0: %08x\n",soc->is_ebreak,soc->a0); 
+  //     printf("is_ebreak: %d, a0: %08x\n",top->is_ebreak,top->a0); 
 
   //   }else{
   //     printf("BAD a0\n");
-  //     printf("is_ebreak: %d, a0: %08x\n",soc->is_ebreak,soc->a0);
+  //     printf("is_ebreak: %d, a0: %08x\n",top->is_ebreak,top->a0);
   //   }
   // }
 

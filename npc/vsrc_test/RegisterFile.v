@@ -84,12 +84,16 @@ module ysyx_25080207_csr(
    //csr寄存器
     reg [31:0] mcycle;
     reg [31:0] mcycleh;
+    reg [31:0] mvendorid;
+    reg [31:0] marchid;
 
     wire [63:0] mcycle_total;
     assign mcycle_total = {mcycleh, mcycle};
 
-    localparam [31:0] mvendorid = 32'h79737978;
-    localparam [31:0] marchid   = 32'h017eb18f;
+    localparam mvendorid = 32'h79737978;;
+    localparam marchid   = 32'h017eb18f;
+       
+                
 
     always @(posedge clk) begin
         if (rst) begin
@@ -101,12 +105,11 @@ module ysyx_25080207_csr(
                 case (csr_addr)
                     12'hB00: mcycle  <= csr_wdata;
                     12'hB80: mcycleh <= csr_wdata;
-                    12'hF11,12'hF12: ;
                     default: ;
                 endcase
-            end else if(is_csrrs && csr_wdata != 32'b0) begin
+            end elseif (is_csrrs && csr_wdata != 32'0) begin
                 case (csr_addr)
-                    12'hB00: mcycle  <= mcycle | csr_wdata;
+                    12'hB00: mcycle  <= mcycle  | csr_wdata;
                     12'hB80: mcycleh <= mcycleh | csr_wdata;
                     12'hF11,12'hF12: ;
                     default: ;
