@@ -115,8 +115,6 @@ module ex7
                         end                        
                       end
                     end
-
-
                 end
                 key_count <= 0;     // for next
               end

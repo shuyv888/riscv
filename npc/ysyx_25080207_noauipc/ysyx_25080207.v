@@ -60,11 +60,11 @@ module ysyx_25080207_GPR #(ADDR_WIDTH = 5,DATA_WIDTH = 32)
 (
     input clk,
     input [DATA_WIDTH-1:0] wdata,
-    input [4:0] waddr,
+    input [ADDR_WIDTH-1:0] waddr,
     input wen,
     input pc_update_en,
-    input [4:0] raddr1,
-    input [4:0] raddr2,
+    input [ADDR_WIDTH-1:0] raddr1,
+    input [ADDR_WIDTH-1:0] raddr2,
     // output [DATA_WIDTH-1:0] a0,
     output [DATA_WIDTH-1:0] rdata1,
     output [DATA_WIDTH-1:0] rdata2
@@ -74,14 +74,14 @@ module ysyx_25080207_GPR #(ADDR_WIDTH = 5,DATA_WIDTH = 32)
     assign reg_wen = wen && pc_update_en;
 
     //普通寄存器
-    reg [DATA_WIDTH-1:0] rf [(1<<ADDR_WIDTH)-1:0];
+    reg [DATA_WIDTH-1:0] rf [2**ADDR_WIDTH-1:0];
 
     always @(posedge clk) begin
-        if (reg_wen && (waddr != 0)) rf[waddr[ADDR_WIDTH-1:0]] <= wdata;
+        if (reg_wen && (waddr != 0)) rf[waddr] <= wdata;
     end
 
-    assign rdata1 = (raddr1 == 5'd0) ? {DATA_WIDTH{1'b0}} : rf[raddr1[ADDR_WIDTH-1:0]];
-    assign rdata2 = (raddr2 == 5'd0) ? {DATA_WIDTH{1'b0}} : rf[raddr2[ADDR_WIDTH-1:0]];
+    assign rdata1 = (raddr1 == {ADDR_WIDTH{1'b0}}) ? {DATA_WIDTH{1'b0}} : rf[raddr1];
+    assign rdata2 = (raddr2 == {ADDR_WIDTH{1'b0}}) ? {DATA_WIDTH{1'b0}} : rf[raddr2];
     // assign a0 = rf[10];
 endmodule
 
@@ -103,6 +103,7 @@ module ysyx_25080207_exu (
     input is_sw,
     input is_sb,
     input is_jalr,
+    //input is_auipc,
     input is_csrrw,
     input is_csrrs,
     output [31:0] wdata,
@@ -111,6 +112,7 @@ module ysyx_25080207_exu (
     output [31:0] csr_wdata
 );
     wire [31:0] wdata_add, wdata_addi, wdata_lui, wdata_lw, wdata_lbu, wdata_jalr;
+   // wire [31:0] auipc;
     wire [31:0] mem_wdata_sw, mem_wdata_sb;
 
     assign wdata_add  = is_add  ? (rs1_data + rs2_data) : 32'd0;
@@ -136,6 +138,8 @@ module ysyx_25080207_exu (
     assign wdata_jalr   = pc_reg + 4;
     assign jalr_pc_out  = is_jalr ? ((rs1_data + imm) & 32'hFFFFFFFE) : 32'b0;
 
+    //assign wdata_auipc  = pc_reg + imm;
+
     assign csr_wdata  = (is_csrrw | is_csrrs) ? rs1_data : 32'b0;
 
     assign wdata =  is_add   ? wdata_add  :
@@ -144,6 +148,7 @@ module ysyx_25080207_exu (
                     is_lw    ? wdata_lw   :
                     is_lbu   ? wdata_lbu  :
                     is_jalr  ? wdata_jalr :
+                    //is_auipc ? wdata_auipc:
                     (is_csrrw | is_csrrs) ? csr_rdata  :
                     32'd0;
 
@@ -175,16 +180,17 @@ module ysyx_25080207_idu (
     output reg          is_sw,      // SW指令标志
     output reg          is_sb,      // SB指令标志
     output reg          is_jalr,    // JALR指令标志
+    //output reg          is_auipc,   // AUIPC指令标志
     output reg          is_csrrw,   // CSRRW指令标志
     output reg          is_csrrs,
     // 内存访问控制
     output reg          mem_valid,  // 内存访问有效标志(在lsu要改为lsu_valid)
     output reg          mem_wen,    // 内存写使能（1为写，0为读）
     output reg  [31:0]  mem_addr,  // 内存操作地址
-    output reg  [3:0]   mem_wmask // 内存写掩码（字节使能）
+    output reg  [3:0]   mem_wmask,  // 内存写掩码（字节使能）
     // 异常相关标志
     //output reg          illegal_instruction // 非法指令标志
-    //output reg          is_ebreak          // EBreak指令标志
+    output reg          is_ebreak          // EBreak指令标志
 );  
 
     always @(*) begin
@@ -194,12 +200,13 @@ module ysyx_25080207_idu (
         rd_addr = 5'd0;
         csr_addr = 12'd0;
         imm = 32'd0;
-        {is_add, is_addi, is_lui, is_lw, is_lbu, is_sw, is_sb, is_jalr, is_csrrw, is_csrrs} = 9'b0;
+        {is_add, is_addi, is_lui, is_lw, is_lbu, is_sw, is_sb, is_jalr, is_csrrw, is_csrrs} = 10'b0;
+        //is_auipc =0;
         mem_valid = 0;
         mem_wen = 0;
         mem_addr = 32'b0;
         mem_wmask = 4'b0000;
-        //is_ebreak = 0;
+        is_ebreak = 0;
         // illegal_instruction = 0;
 
         casez (inst)
@@ -285,6 +292,14 @@ module ysyx_25080207_idu (
                 is_jalr = 1;
             end
 
+            // //9. auipc
+            // 32'b???????_?????_?????_???_?????_00101_11: begin 
+            //     wen = inst_valid;
+            //     rd_addr = inst[11:7];
+            //     imm = {inst[31:12], 12'b0};
+            //     is_auipc = 1;
+            // end
+
             //10. csrrw
             32'b???????_?????_?????_001_?????_11100_11: begin
                 wen = inst_valid;
@@ -303,9 +318,16 @@ module ysyx_25080207_idu (
                 is_csrrs = 1;                   // csrrs指令标志（需在模块输出中新增该信号）
             end
 
+            //ebreak
+            32'b0000000_00001_00000_000_00000_11100_11: begin
+                is_ebreak = 1;
+            end
             
-            default: ;
-            
+            default: begin
+                is_ebreak = (inst == 0) ?  0 : 1;
+                // 非法信号指示位
+                // illegal_instruction = (inst == 0) ?  0 : 1;
+            end
         endcase
     end
 endmodule
@@ -316,7 +338,7 @@ module ysyx_25080207_lsu (
     input               clk,            // 时钟信号（上升沿触发）
     input               rst,            // 复位信号（高有效）
     // 控制信号（来自IDU）
-    input               lsu_respValid,  // 仿存请求
+    input  reg          lsu_respValid,  // 仿存请求
     output reg          lsu_reqValid,   // 仿存成功
 
     input               lsu_valid,      // 访存有效标志(mem_valid)（1=需要访存）
@@ -328,13 +350,13 @@ module ysyx_25080207_lsu (
     output reg  [31:0]  mem_rdata,      // 读出的数据（load时有效）
     output reg          lsu_done,       // 访存完成标志（1=操作结束）
 
-    output [31:0] lsu_addr,
-    output        lsu_wen,
-    output [31:0] lsu_wdata,
-    output [ 3:0] lsu_wmask,
+    output      [31:0]  lsu_addr,
+    output              lsu_wen,
+    output      [31:0]  lsu_wdata,
+    output      [3:0]   lsu_wmask,
 
-    input  [31:0] lsu_rdata,
-    input         pc_update_en
+    input       [31:0]  lsu_rdata,
+    input               pc_update_en
 );
     assign lsu_wen    = mem_wen && lsu_reqValid;
     assign lsu_wmask  = mem_wmask;
@@ -374,6 +396,11 @@ module ysyx_25080207_lsu (
         case (state)
             IDLE:begin
                 if (lsu_valid) begin
+                    // if (mem_wen) begin
+                    //     lsu_done = 1;
+                    // end else begin
+                    //     lsu_done =0;
+                    // end
                     lsu_done = 0;
                 end else begin
                     lsu_done = 1;
@@ -382,11 +409,8 @@ module ysyx_25080207_lsu (
             WAIT:begin
                 if (lsu_respValid) begin
                     lsu_done     = 1;
-                end else begin
-                    lsu_done     = 0;
                 end
             end
-            default:lsu_done      =1;
         endcase
     end
 endmodule
@@ -394,65 +418,66 @@ endmodule
 
 //ifu
 module ysyx_25080207_ifu (
-    input               clk,
-    input               rst,
-    input       [31:0]  pc_reg,         // 来自WBU的PC
-    input               pc_update_en,   // PC更新信号
-    input               ifu_respValid,  // 存储器返回信号（1拍）
-    output reg          ifu_reqValid,   // 取指请求信号（1拍）
-    output      [31:0]  ifu_raddr,      // 取指地址
-    input       [31:0]  ifu_rdata,      // 存储器返回数据
-    output reg          inst_valid,     // 输出给IDU的指令有效信号
-    output reg  [31:0]  inst            // 输出给IDU的指令
+    input               clk,            // 时钟信号（上升沿触发）
+    input               rst,            // 复位信号（高有效）
+    input       [31:0]  pc_reg,         // 当前PC值（来自WBU）
+    input               pc_update_en,   // pc是否更新
+    input  reg          ifu_respValid,  // 访问请求
+    output reg          ifu_reqValid,   // 访问成功信号
+    output reg  [31:0]  ifu_raddr,      // 输出到存储器的取指地址（SimpleBus信号）
+    input       [31:0]  ifu_rdata,      // 从存储器接收的指令（SimpleBus信号）
+    output reg          inst_valid,     // 指令有效标志（高有效，通知IDU）
+    output reg  [31:0]  inst            // 输出到IDU的有效指令
 );
-
-    // 状态机定义
-    localparam IDLE = 1'b0;
-    localparam WAIT = 1'b1;
+    localparam IDLE = 1'b0;  // 空闲状态：发送取指地址
+    localparam WAIT = 1'b1;  // 等待状态：等待存储器返回指令
     reg state;
 
-    assign ifu_raddr = pc_reg;
-
-    always @(posedge clk) begin
+    always @(posedge clk ) begin
         if (rst) begin
-            state        <= IDLE;
-            ifu_reqValid <= 1'b0;
-            inst_valid   <= 1'b0;
-            inst         <= 32'b0;
+            state       <= IDLE;
         end else begin
             case (state)
                 IDLE: begin
-                    // 发出一次取指请求（仅1周期）
-                    ifu_reqValid <= 1'b1;
-                    state        <= WAIT;
+                    state       <= WAIT; 
+                    ifu_reqValid <= 1;
                 end
                 WAIT: begin
-                    ifu_reqValid <= 1'b0;  // 请求信号自动清零
-
-                    if (pc_update_en) begin
-                        state      <= IDLE;
-                        inst_valid <= 1'b0;
-                    end else if (ifu_respValid) begin
-                        inst       <= ifu_rdata;
-                        inst_valid <= 1'b1;
+                    if(pc_update_en) begin
+                        state <= IDLE;
                     end
+                    ifu_reqValid <= 0;
                 end
             endcase
         end
     end
-endmodule
 
+    always @(*) begin
+        ifu_raddr = pc_reg; 
+        case (state)
+            IDLE:begin
+                inst_valid = 0;
+            end 
+            WAIT:begin
+                if (ifu_respValid) begin
+                    inst    = ifu_rdata;
+                    inst_valid = 1;
+                end
+            end
+        endcase
+    end
+endmodule
 
 
 // wbu
 module ysyx_25080207_wbu #(pc_start = 32'h80000000)
 (
-    input clk,
-    input rst,
-    input is_jalr,
-    input [31:0] jalr_pc_out,
-    input inst_valid,
-    input lsu_done,
+    input             clk,
+    input             rst,
+    input             is_jalr,
+    input      [31:0] jalr_pc_out,
+    input             inst_valid,
+    input             lsu_done,
     output reg [31:0] pc_reg,
     //试一试给pc_update_en给ifu
     output pc_update_en
@@ -529,7 +554,8 @@ module ysyx_25080207 (
     wire [31:0] mem_addr;          // 内存地址（来自EXU）
 
     // 控制信号（来自IDU指令解码）
-    wire is_add, is_addi, is_lui, is_lw, is_lbu, is_sw, is_sb, is_jalr, is_csrrw, is_csrrs;
+    wire is_add, is_addi, is_lui, is_lw, is_lbu, is_sw, is_sb, is_jalr, is_csrrw, is_csrrs, is_ebreak;
+    //wire is_auipc;
     wire inst_valid;               // 指令是否有效
     wire wen;                      // 寄存器堆写使能
     wire mem_valid;                // 内存操作是否有效
@@ -567,19 +593,19 @@ module ysyx_25080207 (
 
 
 
-// `ifdef VERILATOR
-//     //DPI-C使用
-//     import "DPI-C" function void ebreak(input bit is_ebreak);  // 函数名直接用ebreak
+`ifdef VERILATOR
+    //DPI-C使用
+    import "DPI-C" function void ebreak(input bit is_ebreak);  // 函数名直接用ebreak
 
-//     // 在时钟沿触发
-//     always @(posedge clk) begin
-//         if (!rst) begin  // 复位释放后才检测
-//             // 直接调用ebreak函数，传is_ebreak状态，当is_ebreak为1时，触发函数使得main里跳出主循环
-//             ebreak(is_ebreak);
-//         end
-//     end
+    // 在时钟沿触发
+    always @(posedge clk) begin
+        if (!rst) begin  // 复位释放后才检测
+            // 直接调用ebreak函数，传is_ebreak状态，当is_ebreak为1时，触发函数使得main里跳出主循环
+            ebreak(is_ebreak);
+        end
+    end
 
-// `endif
+`endif
 
     // ---------------------- 子模块实例化 ----------------------
     // IFU：指令取指单元
@@ -649,6 +675,7 @@ module ysyx_25080207 (
         .is_sw          (is_sw),
         .is_sb          (is_sb),
         .is_jalr        (is_jalr),
+        // .is_auipc       (is_auipc),
         .is_csrrw       (is_csrrw),
         .is_csrrs       (is_csrrs),
         .wdata          (wdata),
@@ -676,18 +703,20 @@ module ysyx_25080207 (
         .is_sw              (is_sw),
         .is_sb              (is_sb),
         .is_jalr            (is_jalr),
+        // .is_auipc           (is_auipc),
         .is_csrrw           (is_csrrw),
         .is_csrrs           (is_csrrs),
         .mem_valid          (mem_valid),
         .mem_wen            (mem_wen),
         .mem_addr           (mem_addr),
-        .mem_wmask          (mem_wmask)
+        .mem_wmask          (mem_wmask),
         // .illegal_instruction(illegal_instruction),   非法指令标志位
+        .is_ebreak          (is_ebreak)
     );
 
     // GPR：通用寄存器堆
     ysyx_25080207_GPR #(
-        .ADDR_WIDTH(4),   // 寄存器地址宽度（5位→32个寄存器）
+        .ADDR_WIDTH(5),   // 寄存器地址宽度（5位→32个寄存器）
         .DATA_WIDTH(32)   // 寄存器数据宽度（32位）
     ) gpr (
         .clk            (clk),
